@@ -14,6 +14,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
 
+    <link rel="icon" href="{{ asset('images/favicon-logo.png') }}" type="image/x-icon">
+    <link rel="apple-touch-icon" href="{{ asset('images/favicon-logo.png') }}">
+
+
     <title>Laracamp</title>
 </head>
 

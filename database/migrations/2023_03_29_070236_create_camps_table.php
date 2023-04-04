@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('title', 100);
             $table->string('slug', 100);
             $table->unsignedInteger('price');
+            $table->softDeletes();
             $table->timestamps();
         });
     }
