@@ -7,6 +7,7 @@ use App\Models\Camps;
 use App\Models\Checkout;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Requests\User\Checkout\Store;
 use App\Models\User;
 
 class CheckoutController extends Controller
@@ -35,8 +36,12 @@ class CheckoutController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request, Camps $camps, User $user)
+    public function store(Store $request, Camps $camps, User $user)
     {
+
+        // stop proses store
+        return $request->all();
+
         $data = $request->all();
         $data['user_id'] = Auth::id();
         $data['camp_id'] = $camps->id;
