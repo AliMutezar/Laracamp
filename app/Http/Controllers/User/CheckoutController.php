@@ -22,10 +22,13 @@ class CheckoutController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(Camps $camps)
+    public function create(Camps $camps, Request $request)
     {
         // return $camps;
 
+        if ($camps->isRegistered) {
+            return redirect(route('dashboard'))->with('error', "You already registered on {$camps->title} camp.");
+        }
         return view('checkout.create', compact('camps'));
     }
 
