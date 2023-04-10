@@ -24,7 +24,7 @@ class CampTableSeeder extends Seeder
             ],
 
             [
-                'title' =>  'Baru Muali',
+                'title' =>  'Baru Mulai',
                 'slug'  =>  'baru-mulai',
                 'price' =>  '140',
                 'created_at'    =>  now(),

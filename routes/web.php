@@ -5,6 +5,9 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\User\CheckoutController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\User\DashboardController as UserDashboard;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboard;
+use App\Http\Controllers\Admin\CheckoutController as AdminCheckout;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,12 +36,25 @@ Route::get('auth/google/callback', [UserController::class, 'handleProviderCallba
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Checkout
-    Route::get('checkout/success', [CheckoutController::class, 'success'])->name('checkout.success');
-    Route::get('checkout/{camps:slug}', [CheckoutController::class, 'create'])->name('checkout.create');
-    Route::post('checkout/{camps}', [CheckoutController::class, 'store'])->name('checkout.store');
+    Route::get('checkout/success', [CheckoutController::class, 'success'])->name('checkout.success')->middleware('ensureUserRole:user');
+    Route::get('checkout/{camps:slug}', [CheckoutController::class, 'create'])->name('checkout.create')->middleware('ensureUserRole:user');
+    Route::post('checkout/{camps}', [CheckoutController::class, 'store'])->name('checkout.store')->middleware('ensureUserRole:user');
 
     // dashboard
     Route::get('/dashboard', [HomeController::class, 'dashboard'])->name('dashboard');
+
+    // user dashboard
+    Route::prefix('user/dashboard')->namespace('User')->name('user.')->middleware('ensureUserRole:user')->group(function() {
+        Route::get('/', [UserDashboard::class, 'index'])->name('dashboard');
+    });
+
+    // admin dashboard
+    Route::prefix('admin/dashboard')->namespace('Admin')->name('admin.')->middleware('ensureUserRole:admin')->group(function() {
+        Route::get('/', [AdminDashboard::class, 'index'])->name('dashboard');
+
+        // admin set to paid
+        Route::post('checkout/{checkout}', [AdminCheckout::class, 'update'])->name('checkout.update');
+    });
 });
 
 Route::middleware('auth')->group(function () {
