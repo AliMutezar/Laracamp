@@ -12,9 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('checkouts', function (Blueprint $table) {
-            $table->string('payment_status', 100)->default('waiting')->after('camp_id');
-            $table->string('midtrans_url')->nullable()->after('payment_status');
-            $table->string('midtrans_booking_code')->nullable()->after('midtrans_url');
+            $table->string('transaction_status', 100)->after('camp_id');
+            $table->string('midtrans_url')->nullable()->after('transaction_status');
+            $table->string('midtrans_order_id')->nullable()->after('midtrans_url');
+            $table->string('midtrans_payment_type')->nullable()->after('midtrans_order_id');
         });
     }
 
@@ -24,7 +25,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('checkouts', function (Blueprint $table) {
-            $table->dropColumn(['payment_status', 'midtrans_url', 'midtrans_booking_code']);
+            $table->dropColumn(['transaction_status', 'midtrans_url', 'midtrans_order_id', 'midtrans_payment_type']);
         });
     }
 };

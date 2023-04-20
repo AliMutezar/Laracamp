@@ -21,4 +21,9 @@ class Camps extends Model
 
         return Checkout::whereCampId($this->id)->whereUserId(Auth::id())->exists();
     }
+
+    public function Checkouts()
+    {
+        return $this->hasMany(Checkout::class, 'camp_id');
+    }
 }

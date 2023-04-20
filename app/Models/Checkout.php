@@ -20,7 +20,7 @@ class Checkout extends Model
     // }
 
 
-    protected $fillable = ['user_id', 'camp_id', 'payment_status', 'midtrans_url', 'midtrans_booking_code'];
+    protected $fillable = ['user_id', 'camp_id', 'transaction_status', 'midtrans_url', 'midtrans_order_id', 'midtrans_payment_type'];
 
     /**
      * Get the Camps that owns the Checkout

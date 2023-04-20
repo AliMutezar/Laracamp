@@ -10,16 +10,23 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\User\Checkout\Store;
 use App\Models\User;
 
-use App\Mail\Checkout\AfterCheckout;
-use Exception;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
+// use App\Mail\Checkout\AfterCheckout;
+// use Illuminate\Support\Facades\Mail;
 
-use Midtrans\Config;
-use Midtrans\Snap;
+use Exception;
+use Illuminate\Support\Str;
 
 class CheckoutController extends Controller
 {
+
+    public function __construct()
+    {
+        \Midtrans\Config::$serverKey = env('MIDTRANS_SERVERKEY');
+        \Midtrans\Config::$isProduction = env('MIDTRANS_IS_PRODUCTION');
+        \Midtrans\Config::$isSanitized = env('MIDTRANS_IS_SANITIZED');
+        \Midtrans\Config::$is3ds = env('MIDTRANS_IS_3DS');
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -51,26 +58,26 @@ class CheckoutController extends Controller
         // return $request->all();
 
         $data = $request->all();
-        $data['user_id'] = Auth::id();
+        $data['user_id'] = Auth::user()->id;
         $data['camp_id'] = $camps->id;
+        $data['transaction_status'] = 'pending';
 
         // Update user
         $user = User::find(Auth::user()->id);
         $user->name  = $data['name'];
         $user->email = $data['email'];
         $user->occupation = $data['occupation'];
+        $user->phone = $data['phone'];
+        $user->address = $data['address'];
         $user->save();
 
         // Create checkout
-        $checkout = Checkout::create($data);
-
-        // snap redirect midtrans
-        $this->getSnapRedirect($checkout);
+        Checkout::create($data);
 
         // sending email
-        Mail::to(Auth::user()->email)->send(new AfterCheckout($checkout));
+        // Mail::to(Auth::user()->email)->send(new AfterCheckout($checkout));
 
-        return redirect(route('checkout.success'));
+        return redirect(route('checkout.process', $camps->id));
 
 
     }
@@ -107,124 +114,171 @@ class CheckoutController extends Controller
         //
     }
 
-    public function success()
+    public function process(Camps $camps, $id)
     {
-        return view('checkout.success');
+        $status = Camps::with('Checkouts')->findOrFail($id);
+        // return $status;
+        return view('checkout.unfinish', [
+            'status' => $status
+        ]);
     }
 
 
     /**
      * Midtrans Handler
      */
-    public function getSnapRedirect(Checkout $checkout)
+    public function getSnapRedirect(Checkout $checkout, $id)
     {
-        $orderId = $checkout->id . '-' . Str::random(5);
-        $price   = $checkout->Camps->price * 1000;
-        $checkout->midtrans_booking_code = $orderId;
+        $data = Checkout::with(['Camps', 'User'])->findOrFail($id);
+        // return $data;
+        $orderId = $data->id.'-'.Str::random(5);
+        $price = $data->Camps->price * 100;
 
         $transaction_details = [
-            "order_id"      =>  $orderId,
-            "gross_amount"  =>  $price
+            'order_id' => $orderId,
+            'gross_amount' => $price
         ];
 
         $item_details[] = [
-            "order_id"      =>  $orderId,
-            "price"         =>  $price,
-            "quantity"      =>  1,
-            "name"          =>  "Payment for {$checkout->Camps->title} camp"
+            'id' => $orderId,
+            'price' => $price,
+            'quantity' => 1,
+            'name' => "Payment for {$data->Camps->title} Camp"
         ];
 
         $userData = [
-            "first_name"    =>  $checkout->User->name,
-            "last_name"     =>  "MIDTRANSER",
-            "address"       =>  $checkout->User->address,
-            "city"          =>  "Jakarta Barat",
-            "postal_code"   =>  "11550",
-            "phone"         =>  $checkout->User->phone,
-            "country_code"  =>  "IDN"
+            "first_name" => $data->User->name,
+            "last_name" => "bin Fulan",
+            "address" => $data->User->address,
+            "city" => "Jakarta Barat",
+            "postal_code" => "11550",
+            "phone" => $data->User->phone,
+            "country_code" => "IDN",
         ];
 
         $customer_details = [
-            "first_name"    =>  $checkout->User->name,
-            "last_name"     =>  "",
-            "email"         =>  $checkout->User->email,
-            "phone"         =>  $checkout->User->phone,
-            "billing_address"  => $userData,
-            "shipping_address" => $userData
+            "first_name" => $data->User->name,
+            "last_name" => "bin Fulan",
+            "email" => $data->User->email,
+            "phone" => $data->User->phone,
+            "billing_address" => $userData,
+            "shipping_address" => $userData,
         ];
 
         $midtrans_params = [
-            "transaction_details"   => $transaction_details,
-            "item_details"          => $item_details,
-            "customer_details"      =>  $customer_details
+            'transaction_details' => $transaction_details,
+            'customer_details' => $customer_details,
+            'item_details' => $item_details,
         ];
 
         try {
-            // Get snap payment URL
-            $paymentUrl = Snap::createTransaction($midtrans_params)->redirect_url;
+            // Get Snap Payment Page URL
+            $paymentUrl = \Midtrans\Snap::createTransaction($midtrans_params)->redirect_url;
+            $checkout = Checkout::find($id);
             $checkout->midtrans_url = $paymentUrl;
+            $checkout->midtrans_order_id = $orderId;
             $checkout->save();
 
-            return $paymentUrl;
-
+            return redirect($paymentUrl);
         } catch (Exception $e) {
-            return false;
+            echo $e->getMessage();
         }
     }
 
     public function midtransCallback(Request $request)
     {
-        $notif = new \Midtrans\Notification();
+        $notif =  new \Midtrans\Notification();
+        $orderId = explode('-', $notif->order_id);
+        $order_id = $orderId[0];
 
-        $transaction_status = $notif->transaction_status;
+        $status = $notif->transaction_status;
         $fraud = $notif->fraud_status;
+        $type = $notif->payment_type;
+        $checkout = Checkout::find($order_id);
 
-        $checkout_id = explode('-', $notif->order_id)[0];
-        $checkout = Checkout::find($checkout_id);
-        
-        if ($transaction_status == 'capture') {
+        if ($status == 'capture') {
             if ($fraud == 'challenge') {
-              // TODO Set payment status in merchant's database to 'challenge'
-              $checkout->payment_status = 'pending';
+                // TODO Set payment status in merchant's database to 'challenge'
+                $checkout->transaction_status = 'pending';
+                $checkout->midtrans_payment_type = $type;
             }
             else if ($fraud == 'accept') {
-              // TODO Set payment status in merchant's database to 'success'
-              $checkout->payment_status = 'paid';
+                // TODO Set payment status in merchant's database to 'success'
+                $checkout->transaction_status = 'paid';
+                $checkout->midtrans_payment_type = $type;
             }
         }
 
-        else if ($transaction_status == 'cancel') {
+        else if ($status == 'cancel') {
             if ($fraud == 'challenge') {
-              // TODO Set payment status in merchant's database to 'failure'
-              $checkout->payment_status = 'failed';
+                // TODO Set payment status in merchant's database to 'failure'
+                $checkout->transaction_status = 'failed';
+                $checkout->midtrans_payment_type = $type;
             }
             else if ($fraud == 'accept') {
-              // TODO Set payment status in merchant's database to 'failure'
-              $checkout->payment_status = 'failed';
+                // TODO Set payment status in merchant's database to 'failure'
+                $checkout->transaction_status = 'failed';
+                $checkout->midtrans_payment_type = $type;
             }
         }
 
-        else if ($transaction_status == 'deny') {
+        else if ($status == 'deny') {
             // TODO Set payment status in merchant's database to 'failure'
-            $checkout->payment_status = 'failed';
+            $checkout->transaction_status = 'failed';
+            $checkout->midtrans_payment_type = $type;
         }
 
-        else if ($transaction_status =='settlement') {
-            //  TODO Set payment status in merchant's database to 'settlement'
-            $checkout->payment_status = 'paid';
+        else if ($status == 'settlement') {
+            // TODO set payment status in merchant's database to 'Settlement'
+            $checkout->transaction_status = 'paid';
+            $checkout->midtrans_payment_type = $type;
         }
 
-        else if ($transaction_status =='pending') {
-            //  TODO Set payment status in merchant's database to 'pending'
-            $checkout->payment_status = 'pending';
+        else if ($status == 'pending') {
+            // TODO set payment status in merchant's database to 'Pending'
+            $checkout->transaction_status = 'pending';
+            $checkout->midtrans_payment_type = $type;
         }
 
-        else if ($transaction_status =='expire') {
-            //  TODO Set payment status in merchant's database to 'expire'
-            $checkout->payment_status = 'failed';
+        else if ($status == 'expire') {
+            // TODO set payment status in merchant's database to 'expire'
+            $checkout->transaction_status = 'failed';
+            $checkout->midtrans_payment_type = $type;
         }
 
         $checkout->save();
         return view('checkout/success');
+    }
+
+    public function midtransFinish(Request $request)
+    {
+        $transaction_status = $request->input('transaction_status');
+        $orderId = explode('-', $request->input('order_id'));
+        $order_id = $orderId[0];
+
+        $status = Checkout::find($order_id);
+        // return $status;
+        if ($transaction_status == 'pending') {
+            return view('checkout.uncompleted', [
+                'status'    =>  $status
+            ]);
+        }
+        return view('checkout.success');
+    }
+
+    // public function midtransUnfinish(Request $request)
+    // {
+    //     $orderId = explode('-', $request->input('order_id'));
+    //     $order_id = $orderId[0];
+
+    //     $status = Checkout::find($order_id);
+    //     return view('checkout.uncompleted', [
+    //         'status'    =>  $status
+    //     ]);
+    // }
+
+    public function midtransError(Request $request)
+    {
+        return view('checkout.error');
     }
 }

@@ -33,16 +33,19 @@ Route::get('/login', function () {
 Route::get('sign-google', [UserController::class, 'google'])->name('user.login.google');
 Route::get('auth/google/callback', [UserController::class, 'handleProviderCallback'])->name('user.google.callback');
 
-// Midtrans
-Route::get('payment/success', [UserController::class, 'midtransCallback']);
-Route::post('payment/success', [UserController::class, 'midtransCallback']);
+// Midtrans endpoint
+Route::post('payment/callback', [CheckoutController::class, 'midtransCallback']);
 
+Route::get('payment/finish', [CheckoutController::class, 'midtransFinish']);
+// Route::get('payment/unfinish', [CheckoutController::class, 'midtransUnfinish'])->name('payment.unfinish');
+Route::get('payment/error', [CheckoutController::class, 'midtransError']);
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Checkout
-    Route::get('checkout/success', [CheckoutController::class, 'success'])->name('checkout.success')->middleware('ensureUserRole:user');
+    Route::get('checkout/process/{id}', [CheckoutController::class, 'process'])->name('checkout.process')->middleware('ensureUserRole:user');
     Route::get('checkout/{camps:slug}', [CheckoutController::class, 'create'])->name('checkout.create')->middleware('ensureUserRole:user');
     Route::post('checkout/{camps}', [CheckoutController::class, 'store'])->name('checkout.store')->middleware('ensureUserRole:user');
+    Route::get('checkout/snapredirect/{id}', [CheckoutController::class, 'getSnapRedirect'])->name('checkout.snapredirect')->middleware('ensureUserRole:user');
 
     // dashboard
     Route::get('/dashboard', [HomeController::class, 'dashboard'])->name('dashboard');
