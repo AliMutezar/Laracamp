@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Requests\User\Checkout\Store;
 use App\Models\User;
+use GuzzleHttp\Client;
 
 // use App\Mail\Checkout\AfterCheckout;
 // use Illuminate\Support\Facades\Mail;
@@ -165,12 +166,19 @@ class CheckoutController extends Controller
             "shipping_address" => $userData,
         ];
 
+        $enabledPayments  = ['bank_transfer', 'gopay'];
         $midtrans_params = [
             'transaction_details' => $transaction_details,
             'customer_details' => $customer_details,
             'item_details' => $item_details,
+            'enabled_payments' => $enabledPayments,
+            'gopay' =>  [
+                'enable_callback' => true,
+                'callback_url' => 'https://alimutezar.com/payment/finish'
+            ]
         ];
 
+        // dd($midtrans_params);
         try {
             // Get Snap Payment Page URL
             $paymentUrl = \Midtrans\Snap::createTransaction($midtrans_params)->redirect_url;
@@ -180,6 +188,97 @@ class CheckoutController extends Controller
             $checkout->save();
 
             return redirect($paymentUrl);
+        } catch (Exception $e) {
+            echo $e->getMessage();
+        }
+    }
+
+    public function gopayment(Checkout $checkout, $id)
+    {
+        $data = Checkout::with(['Camps', 'User'])->findOrFail($id);
+        // return $data;
+        $orderId = $data->id.'-'. Str::random(5);
+        $price = $data->Camps->price * 100;
+
+        $headers = [
+            'Accept'       => 'application/json',
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Basic U0ItTWlkLXNlcnZlci1VUnVGRWhCemJwSGZWVm15cEctaGhlcnk6'   
+        ];
+
+        $userData = [
+            "first_name" => $data->User->name,
+            "last_name" => "bin Fulan",
+            "address" => $data->User->address,
+            "city" => "Jakarta Barat",
+            "postal_code" => "11550",
+            "phone" => $data->User->phone,
+            "country_code" => "IDN",
+        ];
+
+
+        $gopayParams = [
+            'transaction_details'   => [
+                'order_id' =>  $orderId,
+                'gross_amount' =>  $price
+            ],
+
+            'item_details' => [
+                'id' => $data->Camps->id,
+                'price' => $data->Camps->price * 100,
+                'quantity' => 1,
+                'name' => $data->Camps->title
+            ],
+
+            'customer_details'  => [
+                'first_name' => $data->User->name,
+                'last_name' => 'bin Fulan',
+                'email' => $data->User->email,
+                'phone' => $data->User->phone,
+                "billing_address" => $userData,
+                "shipping_address" => $userData
+            ],
+
+            'payment_type'  => 'gopay',
+            'gopay' =>  [
+                'enable_callback' => true,
+                'callback_url' => 'https://alimutezar.com/payment/finish'
+            ]
+        ];
+
+        // return $gopayParams;
+
+        // Sending request body to Midtrans
+        $client = new Client();
+        $response = $client->post('https://api.sandbox.midtrans.com/v2/charge', [
+            'headers'   =>  $headers,
+            'json'      =>  $gopayParams
+        ]);
+
+        $responseBody = json_decode($response->getBody(), true);
+        // return $responseBody;
+
+        
+        try {
+            $deeplinkUrl = $responseBody['actions'][1]['url'];
+            $qrcodeUrl = $responseBody['actions'][0]['url'];
+            $checkout = Checkout::find($id);
+
+            // Check browser viewport to redirect
+            $userAgent = $_SERVER['HTTP_USER_AGENT'];
+            if (strpos($userAgent, 'Mobile') !== false || strpos($userAgent, 'Android') !== false || strpos($userAgent, 'iPhone') !== false ) {
+                $checkout->midtrans_url = $deeplinkUrl;
+                $checkout->midtrans_order_id = $orderId;
+                $checkout->save(); 
+                return redirect($deeplinkUrl);
+
+            } else {
+                $checkout->midtrans_url = $qrcodeUrl;
+                $checkout->midtrans_order_id = $orderId;
+                $checkout->save(); 
+                return redirect($qrcodeUrl);
+            }
+            
         } catch (Exception $e) {
             echo $e->getMessage();
         }

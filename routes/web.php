@@ -35,7 +35,6 @@ Route::get('auth/google/callback', [UserController::class, 'handleProviderCallba
 
 // Midtrans endpoint
 Route::post('payment/callback', [CheckoutController::class, 'midtransCallback']);
-
 Route::get('payment/finish', [CheckoutController::class, 'midtransFinish']);
 // Route::get('payment/unfinish', [CheckoutController::class, 'midtransUnfinish'])->name('payment.unfinish');
 Route::get('payment/error', [CheckoutController::class, 'midtransError']);
@@ -46,6 +45,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('checkout/{camps:slug}', [CheckoutController::class, 'create'])->name('checkout.create')->middleware('ensureUserRole:user');
     Route::post('checkout/{camps}', [CheckoutController::class, 'store'])->name('checkout.store')->middleware('ensureUserRole:user');
     Route::get('checkout/snapredirect/{id}', [CheckoutController::class, 'getSnapRedirect'])->name('checkout.snapredirect')->middleware('ensureUserRole:user');
+    
+    // Core API for Gopay
+    Route::get('checkout/gopayment/{id}', [CheckoutController::class, 'gopayment'])->name('checkout.gopay')->middleware('ensureUserRole:user');
 
     // dashboard
     Route::get('/dashboard', [HomeController::class, 'dashboard'])->name('dashboard');

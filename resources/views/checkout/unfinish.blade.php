@@ -16,7 +16,10 @@
                                MENUNGGU PEMBAYARAN
                             </p>
                             <a href="{{ route('checkout.snapredirect', $checkout->id) }}" class="btn btn-primary mt-3">
-                                Pay Now
+                                Pay with bank transfer
+                            </a>
+                            <a href="{{ route('checkout.gopay', $checkout->id) }}" class="btn btn-primary mt-3">
+                                Pay with gopay
                             </a>
                         </div>
                     @endif
